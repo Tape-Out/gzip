@@ -1,0 +1,130 @@
+package Deflate where
+
+-- RFC 1951 里解码器要查的常数：长度码表、距离码表（§3.2.5）、固定哈夫曼码长（§3.2.6）、
+-- 码长字母表的次序（§3.2.7）。表按原文逐行抄成方程；编译期再按「下一个码的起点 = 这个码的起点 + 2^额外位」
+-- 把表推一遍，两种写法对不上就不让编——抄错一格要到仿真里恰好用到那个码才看得出来，这里提前拦住。
+
+import qualified List
+import qualified Vector
+
+-- 长度码 257..285（§3.2.5 第一张表）
+lenBase :: Integer -> Integer
+lenBase 257 = 3
+lenBase 258 = 4
+lenBase 259 = 5
+lenBase 260 = 6
+lenBase 261 = 7
+lenBase 262 = 8
+lenBase 263 = 9
+lenBase 264 = 10
+lenBase 265 = 11
+lenBase 266 = 13
+lenBase 267 = 15
+lenBase 268 = 17
+lenBase 269 = 19
+lenBase 270 = 23
+lenBase 271 = 27
+lenBase 272 = 31
+lenBase 273 = 35
+lenBase 274 = 43
+lenBase 275 = 51
+lenBase 276 = 59
+lenBase 277 = 67
+lenBase 278 = 83
+lenBase 279 = 99
+lenBase 280 = 115
+lenBase 281 = 131
+lenBase 282 = 163
+lenBase 283 = 195
+lenBase 284 = 227
+lenBase 285 = 258
+lenBase s   = error ("DEFLATE: no length code " +++ integerToString s)
+
+lenExtra :: Integer -> Integer
+lenExtra s =
+  if s >= 257 && s <= 264 then 0
+  else if s >= 265 && s <= 284 then (s - 261) `div` 4
+  else if s == 285 then 0
+  else error ("DEFLATE: no length code " +++ integerToString s)
+
+-- 距离码 0..29（§3.2.5 第二张表）
+distBase :: Integer -> Integer
+distBase 0  = 1
+distBase 1  = 2
+distBase 2  = 3
+distBase 3  = 4
+distBase 4  = 5
+distBase 5  = 7
+distBase 6  = 9
+distBase 7  = 13
+distBase 8  = 17
+distBase 9  = 25
+distBase 10 = 33
+distBase 11 = 49
+distBase 12 = 65
+distBase 13 = 97
+distBase 14 = 129
+distBase 15 = 193
+distBase 16 = 257
+distBase 17 = 385
+distBase 18 = 513
+distBase 19 = 769
+distBase 20 = 1025
+distBase 21 = 1537
+distBase 22 = 2049
+distBase 23 = 3073
+distBase 24 = 4097
+distBase 25 = 6145
+distBase 26 = 8193
+distBase 27 = 12289
+distBase 28 = 16385
+distBase 29 = 24577
+distBase c  = error ("DEFLATE: no distance code " +++ integerToString c)
+
+distExtra :: Integer -> Integer
+distExtra c = if c < 4 then 0 else (c - 2) `div` 2
+
+-- 表自己的区间要首尾相接：257..284 每个码的末尾接下一个码的起点；284 的 5 位额外位本能数到 258，
+-- 原表写 227-257，258 单归 285；距离码首尾相接，29 止于 32768
+tablesAgree :: Bool
+tablesAgree =
+  List.all (\ s -> lenBase (s + 1) == lenBase s + 2 ** lenExtra s) (List.upto 257 283)
+  && lenBase 284 + 2 ** lenExtra 284 - 2 == 257
+  && lenBase 285 == 258 && lenExtra 285 == 0
+  && List.all (\ c -> distBase (c + 1) == distBase c + 2 ** distExtra c) (List.upto 0 28)
+  && distBase 29 + 2 ** distExtra 29 - 1 == 32768
+
+checked :: Vector.Vector n a -> Vector.Vector n a
+checked v =
+  if tablesAgree then v
+  else error "DEFLATE: the length or distance table does not match its own ranges (RFC 1951 3.2.5)"
+
+-- 硬件查的表：长度码按 符号 - 257 编号，距离码按码号编号
+lenBaseTab :: Vector.Vector 29 (UInt 9)
+lenBaseTab = checked (Vector.genWith (\ i -> fromInteger (lenBase (i + 257))))
+
+lenExtraTab :: Vector.Vector 29 (UInt 3)
+lenExtraTab = checked (Vector.genWith (\ i -> fromInteger (lenExtra (i + 257))))
+
+distBaseTab :: Vector.Vector 30 (UInt 16)
+distBaseTab = checked (Vector.genWith (\ c -> fromInteger (distBase c)))
+
+distExtraTab :: Vector.Vector 30 (UInt 4)
+distExtraTab = checked (Vector.genWith (\ c -> fromInteger (distExtra c)))
+
+-- 固定哈夫曼（§3.2.6）：字面/长度 0-143 八位、144-255 九位、256-279 七位、280-287 八位；距离码五位
+fixedLen :: Integer -> Integer
+fixedLen s =
+  if s <= 143 then 8
+  else if s <= 255 then 9
+  else if s <= 279 then 7
+  else 8
+
+fixedLenTab :: Vector.Vector 288 (UInt 4)
+fixedLenTab = Vector.genWith (\ s -> fromInteger (fixedLen s))
+
+-- 码长字母表的次序（§3.2.7）
+clOrderTab :: Vector.Vector 19 (UInt 5)
+clOrderTab = Vector.map fromInteger (Vector.toVector
+  (Cons 16 (Cons 17 (Cons 18 (Cons 0 (Cons 8 (Cons 7 (Cons 9 (Cons 6 (Cons 10 (Cons 5
+  (Cons 11 (Cons 4 (Cons 12 (Cons 3 (Cons 13 (Cons 2 (Cons 14 (Cons 1 (Cons 15 Nil))))))))))))))))))))

@@ -1,0 +1,76 @@
+name: gzip
+version: 0.1.0
+spec: '0.1'
+kind: ip
+lang:
+- bsv
+- bh
+identity:
+  slug: gzip-tapeout-bsv
+  display_name: Gzip decompressor
+  summary: Decompresses one gzip member fed byte by byte over the register 
+    interface, with DEFLATE stored, fixed and dynamic blocks and CRC-32 and size
+    checks.
+  category: accelerator
+  subcategories:
+  - compression
+  ip_family: gzip
+  integration_profile:
+  - apb4-slave
+  maturity: simulated
+contract:
+  version: 1
+  ctrl:
+    shape: flat
+    aw: 8
+    dw: 32
+  irq:
+  - name: irq
+    kind: level
+params:
+  # 滑动窗口 2^winBits 字节，寄存器堆实现。DEFLATE 的距离最远 32 KiB，要那么大得等 SRAM 宏；
+  # 窗口之外的引用报错。下限 10：测试向量用同样大小的 zlib 窗口压，zlib 的原始 DEFLATE 窗口最小做不到 8
+  winBits:
+    type: int
+    default: 11
+    range:
+    - 10
+    - 11
+emit:
+- kind: bsv
+  package: Gzip
+  module: mkGzip
+  config_type: GzipCfg
+  interface: GzipIfc
+  ctrl: regs
+- kind: verilog-flat
+  bus: apb4
+deps:
+  hwcore: ^0.1
+  amba: ^0.1
+area:
+  base:
+    per: winBits
+    points:
+      '10': 163922.36
+      '11': 255888.36
+  margin: 0.0
+  model: points-additive
+  error:
+    bound: 0.0
+    sign: over
+    note: first measured by ran recal --init; every configuration is on the grid
+  measured:
+  - at:
+      winBits: 10
+    um2: 163922.36
+  - at:
+      winBits: 11
+    um2: 255888.36
+  corner:
+    tool: ecc
+    pdk: ics55
+    freq_mhz: 100
+    measured: '2026-09-16'
+    toolchain: bsc 2026.01 · yosys 0.68+195 · ecc 0.1.0a11
+    gen_digest: sha256:7b7ecbdff80c2f19

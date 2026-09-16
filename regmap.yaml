@@ -1,0 +1,36 @@
+ip: gzip
+contract: { aw: 8, dw: 32 }
+base: 0x10014000
+size: 0x100
+regs:
+  - name: ctrl
+    offset: 0x00
+    desc: start clears the decoder and waits for a new gzip member; interrupt enable
+    fields:
+      - { name: start, bits: "0:0", sw: w,  hw: na, swmod: true, wrdata: true, reset: 0 }
+      - { name: ien,   bits: "1:1", sw: rw, hw: r, reset: 0 }
+  - name: status
+    offset: 0x04
+    desc: decoder state, input room, output waiting, and the error code
+    fields:
+      - { name: busy,     bits: "0:0", sw: r, hw: w, volatile: true }
+      - { name: done,     bits: "1:1", sw: r, hw: w, volatile: true }
+      - { name: inready,  bits: "2:2", sw: r, hw: w, volatile: true }
+      - { name: outvalid, bits: "3:3", sw: r, hw: w, volatile: true }
+      - { name: err,      bits: "7:4", sw: r, hw: w, volatile: true }
+  - name: din
+    offset: 0x08
+    desc: write a compressed byte; only while status.inready is set
+    fields: [ { name: val, bits: "7:0", sw: w, hw: na, swmod: true, wrdata: true, reset: 0 } ]
+  - name: dout
+    offset: 0x0C
+    desc: the next decompressed byte; reading it takes the byte
+    fields: [ { name: val, bits: "7:0", sw: r, hw: w, volatile: true, swacc: true } ]
+  - name: isize
+    offset: 0x10
+    desc: bytes decompressed so far
+    fields: [ { name: val, width: 32, sw: r, hw: w, volatile: true } ]
+  - name: crc
+    offset: 0x14
+    desc: CRC-32 of the bytes decompressed so far
+    fields: [ { name: val, width: 32, sw: r, hw: w, volatile: true } ]
