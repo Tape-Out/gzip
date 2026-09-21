@@ -249,7 +249,7 @@ verdict = (f"with a {2**wb}-byte window, dynamic, fixed and stored blocks, two h
 
 TEMPLATE = r'''package Gzip@L@Tb;
 
-// 由 tb/mkgziptb.py 生成，勿手改。这一点：winBits=@WB@，@NCASES@ 个用例
+// 由 htest/mkgziptb.py 生成，勿手改。这一点：winBits=@WB@，@NCASES@ 个用例
 
 import StmtFSM::*;
 import RegIf::*;
